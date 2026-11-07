@@ -355,6 +355,8 @@ function clean(s) {
   s = Object.assign(fresh(), isObj(s) ? s : {}); for (const k of ["days", "hdays", "late", "seen", "one", "runs", "ach", "kofi"]) if (!isObj(s[k])) s[k] = {}; s.ebest = +s.ebest || 0;
   s.ended = Array.isArray(s.ended) ? s.ended.filter((x) => typeof x === "string").slice(-40) : [];
   for (const m in s.runs) { const r = s.runs[m]; if (!isObj(r) || !Array.isArray(r.res) || !Array.isArray(r.list) || typeof r.date !== "string" || s.ended.includes(r.id) || !r.res.every(okRes) || !r.list.every((q) => G.valid(q))) delete s.runs[m]; }
+  const rec = (x) => isObj(x) && Array.isArray(x.r) && x.r.every((r) => isObj(r) && typeof r.m === "number");
+  for (const k of ["days", "hdays", "late"]) for (const d in s[k]) if (!rec(s[k][d])) delete s[k][d];
   return s;
 }
 function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getItem(KEY)); } catch (e) {} try { a = mem !== null ? JSON.parse(mem) : null; } catch (e) {} if (a && a.v !== 1) a = null; if (b && b.v !== 1) b = null; if (!a || !b) return clean(a || b); return clean(merge(clean(a), clean(b))); }
@@ -411,7 +413,7 @@ function show(html) { VIEW++; app.innerHTML = html; bindFooter(); window.scrollT
 // ---- ホーム ----
 function home() {
   const s = load(), k = todayKey(), done = s.days[k], hdone = s.hdays[k];
-  for (const m of ["d", "h"]) { const r = s.runs[m]; if (r && r.res.length >= r.list.length) return finish(m); } // 日付が変わっても、解き終えた回は記録してから次へ
+  for (const m of Object.keys(s.runs).filter((k) => k === "d" || k === "h" || k.startsWith("a:"))) { const r = s.runs[m]; if (r && r.res.length >= r.list.length) return finish(m); } // 日付が変わっても、解き終えた回は記録してから次へ
   const met = metSet(s).size, nr = nextRank(met);
   const rd = s.runs.d && s.runs.d.date === k ? s.runs.d : null, rh = s.runs.h && s.runs.h.date === k ? s.runs.h : null;
   const back = !done && Object.keys(s.days).length && !s.days[prevDay(k)] && !s.late[prevDay(k)];
@@ -495,7 +497,7 @@ function play(key) {
       ${run.mode === "e" || run.list.length < 2 ? "" : `<div class="dots" aria-label="${i + 1}問目／${run.list.length}問">${run.list.map((_, j) => `<i class="${j < i ? "done" : j === i ? "on" : ""}"></i>`).join("")}</div>`}
       <span style="font-size:13px;color:var(--ink2)">${MODES[run.mode]} ${n}</span></header>
     <p class="ask" id="ask" data-a11y-say>${ASK[q.k]}</p>
-    <div id="board"></div>
+    <div id="board" data-a11y-say></div>
     <div class="status"><span id="st"></span>${cur.hard ? `<span>上級はヒントなし</span>` : `<button class="sub" id="hint" type="button" style="min-height:44px">ヒント</button>`}</div>
     ${run.mode === "e" ? `<button class="sub" id="quit">ここで降りる</button>` : ""}
     <div id="after"></div>

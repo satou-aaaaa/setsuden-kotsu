@@ -46,7 +46,7 @@ const T = G.TIPS;
 // 2. 今日の5問・上級（3年分）
 {
   const bad = [];
-  let over = 0;
+  let over = 0, hover = 0, hn = 0;
   for (let n = 0; n < 365 * 3; n++) {
     const k = day(n), d = G.dailyList(k), h = G.hardList(k), di = d.flatMap(G.idsOf), hi = h.flatMap(G.idsOf);
     if (d.length !== 5 || h.length !== 3) bad.push(k + ":数");
@@ -55,16 +55,18 @@ const T = G.TIPS;
     if (hi.some((t) => di.includes(t)) || new Set(hi).size !== hi.length) bad.push(k + ":上級の重なり");
     if (d.concat(h).some((q) => !G.valid(q) || G.idsOf(q).some((t) => t > G.DAILY_MAX_ID))) bad.push(k + ":こわれた問題");
     d.forEach((q, j) => { if (q.k === "p") { const r = G.ratio(T[q.a].y, T[q.b].y); if (r < G.RATIO[j]) bad.push(k + ":差が小さい" + j); if (G.RATIO_HI[j] && r > G.RATIO_HI[j] * 2) over++; } });
-    h.forEach((q) => { const ys = q.ts.map((t) => T[t].y).sort((a, b) => b - a); if (ys[0] < ys[1] * 1.25) bad.push(k + ":上級の差"); });
+    h.forEach((q) => { const ys = q.ts.map((t) => T[t].y).sort((a, b) => b - a); if (ys[0] < ys[1] * 1.25) bad.push(k + ":上級の差"); if (ys[0] > ys[1] * 1.6) hover++; hn++; });
+    d.filter((q) => q.k === "y").forEach((q) => { if (q.o.some((v) => !G.YEN_D.includes(v))) bad.push(k + ":今日の外の金額"); });
     d.filter((q) => q.k === "y").forEach((q) => { const y = T[q.t].y; if (q.o.some((v) => v !== y && G.ratio(v, y) < 1.6)) bad.push(k + ":選び肢が近い"); });
   }
   check("今日の5問は どっち・いくら・どっち・いくら・どっち、上級は3つから選ぶ×3、同じ工夫を重ねない・差は3倍→2倍→1.4倍以上・上級は1.25倍以上・金額の選び肢は1.6倍以上ちがう（3年分）", bad.length === 0, bad.slice(0, 5).join(","));
   check("5問目の差が上限の2倍を超える日はわずか（3年で20日まで）", over <= 20, over);
+  check("上級のいちばんと2番目の差は、ほとんど1.6倍まで（95%以上。近い組が無いときだけ広げる）", hover <= hn * 0.05, hover + "/" + hn);
   const seen = new Set(); for (let n = 0; n < 30; n++) G.dailyList(day(n)).forEach((q) => seen.add(G.idsOf(q)[0]));
   check("30日で今日の問題にほとんどの工夫が出る（35以上）", seen.size >= 35, seen.size);
   { let err = ""; try { for (const k of ["2026-11-06", "2026-10-01", "2025-01-01"]) { G.dailyList(k); G.hardList(k); if (G.dayNo(k) !== 1) err = k + " #" + G.dayNo(k); } } catch (e) { err = e.message; } check("時計が第1回より前にずれていても今日の問題が作れる（番号は #1）", !err, err); }
   const snap = createHash("sha256").update(JSON.stringify([...Array(120)].map((_, n) => [G.dailyList(day(n)), G.hardList(day(n))]))).digest("hex").slice(0, 16);
-  check("はじめの120日の今日の5問・上級は前と同じ（変えると過去の日の問題が変わる）", snap === "cb9c729e40cee689", snap);
+  check("はじめの120日の今日の5問・上級は前と同じ（変えると過去の日の問題が変わる）", snap === "dd8ca9dc69765be3", snap);
   check("乱数は sort の比較の中で引かない", !/sort\([^)]*r\(\)/.test(gameSrc + html));
   check("Math.random は練習・とことんの並びと回の名札だけ（game.js には無い・index.html に5か所）", !/Math\.random/.test(gameSrc + dataSrc) && (html.match(/Math\.random/g) || []).length === 5, (html.match(/Math\.random/g) || []).length);
 }
@@ -173,9 +175,12 @@ try {
   check("上級の記録がつく", await page.evaluate(() => { const s = window.__sk.load(); return !!s.hdays[window.__sk.todayKey()] && s.hdays[window.__sk.todayKey()].r.length === 3; }));
   // とことん
   await page.click("#go-e");
-  for (let j = 0; j < 4; j++) { await answer(page, true); await page.click("#next"); }
+  for (let j = 0; j < 3; j++) { await answer(page, true); await page.click("#next"); }
   c = await cur(page);
-  check("とことん：4問目は「いちばん得は？」", c.i === 4 || c.q.k === "y", c.i + ":" + c.q.k);
+  check("とことん：4問目は「いちばん得は？」", c.i === 3 && c.q.k === "m", c.i + ":" + c.q.k);
+  await answer(page, true); await page.click("#next");
+  c = await cur(page);
+  check("とことん：5問目は「年にいくら？」", c.i === 4 && c.q.k === "y", c.i + ":" + c.q.k);
   await answer(page, false);
   check("とことん：はずれても終わらない（続けての数は0から）", (await page.locator("#quit").count()) === 1 && /0から/.test(await page.textContent(".verdict")));
   await page.click("#next");
@@ -257,6 +262,8 @@ try {
     check("途中経過の中身がこわれていても（res が [null]・知らない問題）ホームが出て、その回だけ消える", await p.evaluate((K) => { const k = window.__sk.todayKey(); for (const bad of [{ res: [null], list: [] }, { res: [], list: [{ k: "p", a: 0, b: 0 }] }, { list: [] }]) { localStorage.setItem(K, JSON.stringify({ v: 1, tut: true, days: {}, runs: { d: Object.assign({ mode: "d", date: k, id: "q" }, bad) } })); try { window.__sk.home(); if (!document.getElementById("go-d") || window.__sk.load().runs.d) return false; } catch (e) { return false; } } return true; }, KEY));
     check("「ここで降りる」で終えた回は、古いタブの写しと合わせても戻らない", await p.evaluate((K) => { const base = { mode: "e", date: "2000-01-01", list: [], res: [{ m: 0, h: 0 }], id: "endrun" }; localStorage.setItem(K, JSON.stringify({ v: 1, tut: true, t: 9, ended: ["endrun"], runs: {} })); mem = JSON.stringify({ v: 1, tut: true, t: 5, runs: { e: base } }); const r = window.__sk.load(); mem = null; return !r.runs.e; }, KEY));
     check("きのう解き終えて結果を見ずに閉じた回も、次に開いたとき記録する", await p.evaluate((K) => { const y = window.__sk.prevDay(window.__sk.todayKey()), list = window.SKG.dailyList(y); localStorage.setItem(K, JSON.stringify({ v: 1, tut: true, t: 1, runs: { d: { mode: "d", date: y, id: "yy", list, res: list.map(() => ({ m: 0, h: 0 })), cur: null } } })); window.__sk.home(); const s = window.__sk.load(); return !!s.days[y] && !s.runs.d; }, KEY));
+    check("あとからの回も、解き終えて結果を見ずに閉じたら次に開いたとき記録する", await p.evaluate((K) => { const y = window.__sk.prevDay(window.__sk.todayKey()), list = window.SKG.dailyList(y); localStorage.setItem(K, JSON.stringify({ v: 1, tut: true, t: 1, runs: { ["a:" + y]: { mode: "a", date: y, id: "ay", list, res: list.map(() => ({ m: 0, h: 0 })), cur: null } } })); window.__sk.home(); const s = window.__sk.load(); return !!s.late[y] && !s.runs["a:" + y]; }, KEY));
+    check("こわれた日の記録（r が無い・数でない）は読むときに捨て、画面が出る", await p.evaluate((K) => { localStorage.setItem(K, JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: "x" }] }, "2026-11-08": 3 }, hdays: { "2026-11-07": {} }, late: { "2026-11-06": { r: [{ m: 0, h: 0 }] } } })); try { window.__sk.home(); const s = window.__sk.load(); return !!document.getElementById("go-d") && !Object.keys(s.days).length && !Object.keys(s.hdays).length && !!s.late["2026-11-06"]; } catch (e) { return false; } }, KEY));
     await p.close(); }
 
   // スマホ幅 320px・押せる所の大きさ
