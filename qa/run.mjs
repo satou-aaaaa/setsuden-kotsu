@@ -28,19 +28,19 @@ const T = G.TIPS;
   for (const t of T) {
     if (!t.a || t.a.length > 26) bad.push("工夫:" + t.a);
     if (!t.c || t.c.length > 60) bad.push("条件:" + t.a);
-    if (!Number.isInteger(t.y) || t.y < 10 || t.y > 10000) bad.push("円:" + t.a);
+    if (!Number.isInteger(t.y) || t.y < 10 || t.y > 15000) bad.push("円:" + t.a);
     if (!t.e || !/kWh|m3|m³|L|円/.test(t.e)) bad.push("へる量:" + t.a);
     if (!t.w || t.w.length > 40) bad.push("教え:" + t.a);
     if (!G.GROUPS.includes(t.g) || !/^https:\/\/www\.enecho\.meti\.go\.jp\/category\/saving_and_new\/saving\/general\/howto\/[a-z]+\/index\.html$/.test(t.src)) bad.push("出典:" + t.a);
   }
   check("工夫のデータの形（工夫26字以内・条件60字以内・1年の円・へる量・教え40字以内・資源エネルギー庁のページ）", bad.length === 0, bad.slice(0, 5).join(" / "));
   check("同じ見出しの工夫が二つ無い", new Set(T.map((t) => t.a)).size === T.length);
-  check("工夫は40以上・なかまは4つ", T.length >= 40 && G.GROUPS.length === 4, T.length);
+  check("工夫は48以上・なかまは5つ（洗濯・掃除を足した）", T.length >= 48 && G.GROUPS.length === 5, T.length);
   check("番号（id）は0から順に並ぶ（今日の問題の番号。足すのは最後だけ）", T.every((t, i) => t.id === i));
   // 出典の数字（2026-11-07 に資源エネルギー庁のページで確かめた値。/mnt/project-files/games/setsuden-research.md）
-  const want = { "冷房の温度を1℃上げる": 270, "白熱電球をLED電球に": 2880, "手洗いをやめて食器洗い乾燥機でまとめ洗い": 6790 };
+  const want = { "冷房の温度を1℃上げる": 270, "白熱電球をLED電球に": 2880, "手洗いをやめて食器洗い乾燥機でまとめ洗い": 6790, "自然乾燥のあと乾燥機で仕上げ": 12230, "洗濯物は容量の8割でまとめ洗い": 4510 };
   const got = Object.keys(want).filter((a) => T.some((t) => t.a === a));
-  check("出典の数字が書き写したまま（冷房1℃ 270円など）", got.length === 3 && got.every((a) => T.find((t) => t.a === a).y === want[a]), got.join(","));
+  check("出典の数字が書き写したまま（冷房1℃ 270円など）", got.length === 5 && got.every((a) => T.find((t) => t.a === a).y === want[a]), got.join(","));
   check("計算の前提（電気31円/kWh など）を画面に出す", /31円\/kWh/.test(G.PRICE) && /id="price"/.test(html));
 }
 // 2. 今日の5問・上級（3年分）
@@ -83,7 +83,7 @@ const T = G.TIPS;
   }
   check("とことん：工夫の数だけ問題・続けて同じ問題を出さない・同じ工夫の金額を2回聞かない・こわれた問題を作らない（400回）", bad.length === 0, bad.slice(0, 5).join(","));
   const pb = [];
-  for (let t = 0; t < 300; t++) { const g = t % 5 === 4 ? "" : G.GROUPS[t % 4], L = G.practiceList(G.rng(G.seedOf("qa-p:" + t)), g); if (L.length !== 5 || L.some((q) => !G.valid(q))) pb.push(t); }
+  for (let t = 0; t < 300; t++) { const g = t % 6 === 5 ? "" : G.GROUPS[t % 6 % 5], L = G.practiceList(G.rng(G.seedOf("qa-p:" + t)), g); if (L.length !== 5 || L.some((q) => !G.valid(q))) pb.push(t); }
   check("練習：なかまごとに5問・こわれた問題を作らない（300回）", pb.length === 0, pb.slice(0, 5).join(","));
   { const L = G.practiceList(G.rng(1), T[7].g, 7); check("練習：コツ帳から選んだ工夫が1問目に出る", G.idsOf(L[0]).includes(7)); }
   check("こわれた問題は使わない（valid）", !G.valid({ k: "p", a: 0, b: 0 }) && !G.valid({ k: "p", a: 0, b: 99 }) && !G.valid({ k: "y", t: 0, o: [1, 2, 3] }) && !G.valid({ k: "y", t: 0, o: [T[0].y, T[0].y, 5] }) && !G.valid({ k: "m", ts: [0, 1] }) && !G.valid({ k: "x" }) && !G.valid({ k: "p", a: "0", b: 1 }));
@@ -194,7 +194,7 @@ try {
   await page.evaluate(() => window.__sk.home());
   // 練習・コツ帳
   await page.click("#go-p");
-  check("練習：4つのなかまから選べる", (await page.locator(".res button").count()) === 4);
+  check("練習：5つのなかまから選べる", (await page.locator(".res button").count()) === 5);
   await page.click('.res button[data-g="照明"]');
   c = await cur(page);
   check("練習：選んだなかまの工夫が出る", c.mode === "p" && T[G.idsOf(c.q)[0]].g === "照明");
@@ -207,6 +207,18 @@ try {
   check("コツ帳：出会った工夫は押せる、まだの工夫は「？？？」", (await page.locator(".res .no").count()) === T.length - met.length && (await page.locator(".res button[data-t]").count()) === met.length);
   await page.click(`.res button[data-t="${met[0]}"]`);
   check("コツ帳の工夫：金額・条件・なぜ・出典・「この工夫から練習する」", (await page.textContent(".detail .yy")).includes("円") && (await page.locator('.detail a[href^="https://www.enecho.meti.go.jp/"]').count()) === 1 && (await page.locator("#again").count()) === 1);
+  // わが家でやる（2026-11-07）：押すと記録に入り、コツ帳の上に合計が出る。もう一度押すと外れる。古いタブと合わせてもあとで押したほうが残る
+  await page.click("#plan-t");
+  const pl1 = await page.evaluate(() => window.__sk.planIds(window.__sk.load()));
+  check("わが家でやる：押すと入り、ボタンが ✓ と aria-pressed=true になる", pl1.length === 1 && pl1[0] === met[0] && (await page.getAttribute("#plan-t", "aria-pressed")) === "true" && (await page.textContent("#plan-t")).includes("✓"));
+  await page.evaluate(() => window.__sk.dex());
+  check("わが家でやる：コツ帳の上に工夫の数と1年の合計が出て、一覧に ✓ が付く", (await page.textContent("#plan")).includes(`1つで1年で 約${T[met[0]].y.toLocaleString("ja-JP")}円`) && (await page.textContent(`.res button[data-t="${met[0]}"]`)).includes("✓"));
+  await page.evaluate((i) => window.__sk.tip(i), met[0]);
+  await page.click("#plan-t");
+  check("わが家でやる：もう一度押すと外れる", (await page.evaluate(() => window.__sk.planIds(window.__sk.load()).length)) === 0 && (await page.getAttribute("#plan-t", "aria-pressed")) === "false");
+  check("わが家でやる：古いタブの写しと合わせても、あとで押したほう（外した）が残る", await page.evaluate((i) => { const s = window.__sk.load(), old = JSON.parse(JSON.stringify(s)); old.plan[i] = [1, 1]; old.t = s.t + 9e9; const m = window.__sk.clean(window.__sk.merge(window.__sk.clean(old), window.__sk.clean(s))); return window.__sk.planIds(m).length === 0 && m.plan[i][0] === 0; }, met[0]));
+  check("わが家でやる：こわれた値（無い工夫・形のちがう値）は読み捨てる", await page.evaluate(() => { const s = window.__sk.load(), b = JSON.parse(JSON.stringify(s)); b.plan = { 999: [1, 1], 0: "x", 1: [1, 5] }; return JSON.stringify(window.__sk.planIds(window.__sk.clean(b))) === "[1]"; }));
+  await page.evaluate((i) => window.__sk.tip(i), met[0]);
   await page.click("#again");
   check("コツ帳から練習：その工夫が1問目に出る", G.idsOf((await cur(page)).q).includes(met[0]));
   await page.close();
@@ -282,7 +294,7 @@ try {
     await p.close(); }
 
   // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
-  { const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0 }] } }, hdays: {}, late: {}, seen: { 0: 1, 5: 2 }, one: { 0: 1 }, ebest: 4, runs: {}, ach: {}, kofi: {}, t: 1 }) };
+  { const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0 }] } }, hdays: {}, late: {}, seen: { 0: 1, 5: 2 }, one: { 0: 1 }, ebest: 4, runs: {}, ach: {}, kofi: {}, plan: { 0: [1, 5] }, t: 1 }) };
     await checkTransfer({ browser, url, game: "setsuden-kotsu", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); }); } }); }
 } catch (e) {
   check("QA の操作が最後まで完了する", false, e.message.split("\n")[0]);
