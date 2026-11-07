@@ -140,6 +140,11 @@
     return ids.map((t, j) => { const kind = ["p", "y", "m", "p", "y"][j], pool = mine.length >= 6 ? mine : all; return make(kind, t, r, pool, new Set(), kind === "m" ? 1.2 : 1.4); });
   }
 
-  const api = { TIPS, EPOCH, DAILY_MAX_ID, KINDS, RATIO, RATIO_HI, HARD_N, YEN_D, GROUPS: D.GROUPS, PRICE: D.PRICE, seedOf, rng, shuffle, dayNo, ratio, idsOf, answerOf, valid, dailyList, hardList, starsOf, endlessList, practiceList, eRatio };
+  // おさらい：まちがえた工夫（ids）を「年にいくら？」で毎回ちがう順に5問まで
+  function reviewList(r, ids) {
+    const all = TIPS.map((t) => t.id), ok = [...new Set(ids)].filter((i) => Number.isInteger(i) && TIPS[i]);
+    return shuffle(ok, r).slice(0, 5).map((t) => make("y", t, r, all, new Set()));
+  }
+  const api = { TIPS, EPOCH, DAILY_MAX_ID, KINDS, RATIO, RATIO_HI, HARD_N, YEN_D, GROUPS: D.GROUPS, PRICE: D.PRICE, seedOf, rng, shuffle, dayNo, ratio, idsOf, answerOf, valid, dailyList, hardList, starsOf, endlessList, practiceList, reviewList, eRatio };
   if (typeof module !== "undefined") module.exports = api; else window.SKG = api;
 })();

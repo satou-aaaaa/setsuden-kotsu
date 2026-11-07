@@ -68,7 +68,7 @@ const T = G.TIPS;
   const snap = createHash("sha256").update(JSON.stringify([...Array(120)].map((_, n) => [G.dailyList(day(n)), G.hardList(day(n))]))).digest("hex").slice(0, 16);
   check("はじめの120日の今日の5問・上級は前と同じ（変えると過去の日の問題が変わる）", snap === "dd8ca9dc69765be3", snap);
   check("乱数は sort の比較の中で引かない", !/sort\([^)]*r\(\)/.test(gameSrc + html));
-  check("Math.random は練習・とことんの並びと回の名札だけ（game.js には無い・index.html に5か所）", !/Math\.random/.test(gameSrc + dataSrc) && (html.match(/Math\.random/g) || []).length === 5, (html.match(/Math\.random/g) || []).length);
+  check("Math.random は練習・とことんの並びと回の名札だけ（game.js には無い・index.html に6か所）", !/Math\.random/.test(gameSrc + dataSrc) && (html.match(/Math\.random/g) || []).length === 6, (html.match(/Math\.random/g) || []).length);
 }
 // 3. とことん・練習（何百回）
 {
@@ -218,6 +218,18 @@ try {
   check("わが家でやる：もう一度押すと外れる", (await page.evaluate(() => window.__sk.planIds(window.__sk.load()).length)) === 0 && (await page.getAttribute("#plan-t", "aria-pressed")) === "false");
   check("わが家でやる：古いタブの写しと合わせても、あとで押したほう（外した）が残る", await page.evaluate((i) => { const s = window.__sk.load(), old = JSON.parse(JSON.stringify(s)); old.plan[i] = [1, 1]; old.t = s.t + 9e9; const m = window.__sk.clean(window.__sk.merge(window.__sk.clean(old), window.__sk.clean(s))); return window.__sk.planIds(m).length === 0 && m.plan[i][0] === 0; }, met[0]));
   check("わが家でやる：こわれた値（無い工夫・形のちがう値）は読み捨てる", await page.evaluate(() => { const s = window.__sk.load(), b = JSON.parse(JSON.stringify(s)); b.plan = { 999: [1, 1], 0: "x", 1: [1, 5] }; return JSON.stringify(window.__sk.planIds(window.__sk.clean(b))) === "[1]"; }));
+  // おさらい（2026-11-07）：まちがえた問題の答えの工夫に印が付き、練習の「おさらい」で「年にいくら？」として出る。一度で当てると外れる
+  await page.evaluate(() => { window.__sk.save((x) => { x.miss = { 3: [1, 5], 9: [1, 5], 20: [0, 5] }; }); window.__sk.practiceMenu(); });
+  check("おさらい：練習の画面にまちがえた工夫の数が出る", (await page.textContent("#miss")).includes("2つ"));
+  await page.click("#miss");
+  { let c = await cur(page);
+    check("おさらい：まちがえた工夫だけを「年にいくら？」で出す", c.mode === "p" && c.q.k === "y" && [3, 9].includes(c.q.t) && (await page.evaluate(() => window.__sk.load().runs.p.list.length)) === 2);
+    const m1 = c.q.t; await answer(page, true);
+    check("おさらい：一度で当てると印が外れる", JSON.stringify(await page.evaluate(() => window.__sk.missIds(window.__sk.load()))) === JSON.stringify([m1 === 3 ? 9 : 3]));
+    await page.click("#next"); c = await cur(page); await answer(page, false);
+    check("おさらい：はずれた工夫は印が残る", (await page.evaluate(() => window.__sk.missIds(window.__sk.load()))).includes(c.q.t));
+    check("おさらい：古いタブの写しと合わせても、あとで付け外ししたほうが残る", await page.evaluate((i) => { const s = window.__sk.load(), old = JSON.parse(JSON.stringify(s)); old.miss[i] = [1, 1]; old.t = s.t + 9e9; const m = window.__sk.clean(window.__sk.merge(window.__sk.clean(old), window.__sk.clean(s))); return !window.__sk.missIds(m).includes(i); }, m1));
+    check("おさらい：こわれた値は読み捨てる", await page.evaluate(() => JSON.stringify(window.__sk.missIds(window.__sk.clean({ v: 1, miss: { 999: [1, 1], 2: "x", 4: [1, 3], 5: [2, 1] } }))) === "[4]")); }
   await page.evaluate((i) => window.__sk.tip(i), met[0]);
   await page.click("#again");
   check("コツ帳から練習：その工夫が1問目に出る", G.idsOf((await cur(page)).q).includes(met[0]));
@@ -294,7 +306,7 @@ try {
     await p.close(); }
 
   // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
-  { const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0 }] } }, hdays: {}, late: {}, seen: { 0: 1, 5: 2 }, one: { 0: 1 }, ebest: 4, runs: {}, ach: {}, kofi: {}, plan: { 0: [1, 5] }, t: 1 }) };
+  { const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0 }] } }, hdays: {}, late: {}, seen: { 0: 1, 5: 2 }, one: { 0: 1 }, ebest: 4, runs: {}, ach: {}, kofi: {}, plan: { 0: [1, 5] }, miss: { 3: [1, 5] }, t: 1 }) };
     await checkTransfer({ browser, url, game: "setsuden-kotsu", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); }); } }); }
 } catch (e) {
   check("QA の操作が最後まで完了する", false, e.message.split("\n")[0]);
