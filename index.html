@@ -333,7 +333,7 @@ function lateDays(s, k = todayKey()) { const out = []; let d = prevDay(k); for (
 
 // ---- 記録（この端末の localStorage だけ）----
 // days・hdays・late：日ごとの結果 {r:[{m,h}]}。seen：工夫ごとに出会った回数・one：一度で当てた回数。runs：モードごとの途中経過
-const fresh = () => ({ v: 1, days: {}, hdays: {}, late: {}, seen: {}, one: {}, ebest: 0, runs: {}, ach: {}, kofi: {}, ended: [], tut: false, t: 0 });
+const fresh = () => ({ v: 1, days: {}, hdays: {}, late: {}, seen: {}, one: {}, ebest: 0, runs: {}, ach: {}, kofi: {}, plan: {}, ended: [], tut: false, t: 0 });
 let mem = null; // 保存できない環境では、開いているあいだだけここに置く
 const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
 const okRes = (x) => isObj(x) && Number.isFinite(+x.m) && Number.isFinite(+x.h);
@@ -344,6 +344,8 @@ function merge(a, b) {
   for (const k of ["days", "hdays", "late", "ach", "kofi"]) s[k] = Object.assign({}, n[k], o[k]);
   for (const k of ["seen", "one"]) { s[k] = Object.assign({}, o[k], n[k]); for (const q in o[k] || {}) s[k][q] = Math.max(+o[k][q] || 0, +(n[k] || {})[q] || 0); }
   s.ebest = Math.max(+o.ebest || 0, +n.ebest || 0);
+  // わが家でやる工夫：工夫ごとに、あとで押したほう（[やる 1/0, 押した時刻]）を残す
+  s.plan = Object.assign({}, o.plan, n.plan); for (const q in o.plan || {}) { const x = o.plan[q], y = (n.plan || {})[q]; if (Array.isArray(x) && Array.isArray(y) && +x[1] > +y[1]) s.plan[q] = x; }
   s.tut = !!(o.tut || n.tut);
   s.ended = [...new Set([...(Array.isArray(o.ended) ? o.ended : []), ...(Array.isArray(n.ended) ? n.ended : [])])].slice(-40);
   s.runs = Object.assign({}, o.runs, n.runs);
@@ -352,7 +354,8 @@ function merge(a, b) {
 }
 // 形のこわれた途中経過・終えた回（ended）は捨てる（ホームを止めない・古いタブの写しで終えた回を戻さない）
 function clean(s) {
-  s = Object.assign(fresh(), isObj(s) ? s : {}); for (const k of ["days", "hdays", "late", "seen", "one", "runs", "ach", "kofi"]) if (!isObj(s[k])) s[k] = {}; s.ebest = +s.ebest || 0;
+  s = Object.assign(fresh(), isObj(s) ? s : {}); for (const k of ["days", "hdays", "late", "seen", "one", "runs", "ach", "kofi", "plan"]) if (!isObj(s[k])) s[k] = {}; s.ebest = +s.ebest || 0;
+  for (const q in s.plan) { const x = s.plan[q]; if (!T[+q] || !Array.isArray(x) || (x[0] !== 0 && x[0] !== 1) || !Number.isFinite(+x[1])) delete s.plan[q]; }
   s.ended = Array.isArray(s.ended) ? s.ended.filter((x) => typeof x === "string").slice(-40) : [];
   for (const m in s.runs) { const r = s.runs[m]; if (!isObj(r) || !Array.isArray(r.res) || !Array.isArray(r.list) || typeof r.date !== "string" || s.ended.includes(r.id) || !r.res.every(okRes) || !r.list.every((q) => G.valid(q))) delete s.runs[m]; }
   const rec = (x) => isObj(x) && Array.isArray(x.r) && x.r.every((r) => isObj(r) && typeof r.m === "number");
@@ -364,6 +367,7 @@ function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getI
 function save(fn) { const s = load(); fn(s); s.t = Math.max(Date.now(), (s.t || 0) + 1); const j = JSON.stringify(s); try { localStorage.setItem(KEY, j); mem = null; } catch (e) { mem = j; } return s; }
 function streak(days) { let k = todayKey(), n = 0; if (!days[k]) k = prevDay(k); while (days[k]) { n++; k = prevDay(k); } return n; }
 const playedDays = (s) => new Set([...Object.keys(s.days), ...Object.keys(s.late)]).size;
+const planIds = (s) => Object.keys(s.plan).map(Number).filter((t) => T[t] && s.plan[t][0] === 1);
 const metSet = (s) => new Set(Object.keys(s.seen).map(Number).filter((t) => T[t]));
 const RANKS = [[0, "節電はじめ"], [10, "節電じょうず"], [25, "省エネ名人"], [T.length, "省エネ博士"]];
 const rankOf = (n) => RANKS.filter((r) => n >= r[0]).pop()[1];
@@ -642,10 +646,11 @@ function ach() {
   $("back").onclick = home;
 }
 function dex() {
-  const s = load(), met = metSet(s);
+  const s = load(), met = metSet(s), pl = planIds(s);
   show(`<header><button class="icon" id="back" aria-label="ホームへ">←</button><h1>コツ帳<small>出会った ${met.size}/${T.length}</small></h1><span></span></header>
-    <p class="note" data-a11y-say>出会った工夫は、押すと1年の節約の目安と出典を読めます。まだの工夫は「？？？」です。</p>
-    ${G.GROUPS.map((g) => `<div class="res"><h2>${esc(g)}</h2>${T.filter((t) => t.g === g).map((t) => met.has(t.id) ? `<button data-t="${t.id}"><span>${esc(t.a)}<small>1年で ${yen(t.y)}</small></span><span aria-hidden="true">▶</span></button>` : `<div class="no"><span>？？？（まだ）</span></div>`).join("")}</div>`).join("")}
+    <p class="note" data-a11y-say>出会った工夫は、押すと1年の節約の目安と出典を読めます。「わが家でやる」を選ぶと、ここに合計が出ます。まだの工夫は「？？？」です。</p>
+    <div class="sum" id="plan">${pl.length ? `わが家でやる工夫 ${pl.length}つで<b>1年で ${yen(pl.reduce((a, t) => a + T[t].y, 0))}</b><small>目安（${esc(G.PRICE)}・資源エネルギー庁。家の広さや使い方で変わります）</small>` : `わが家でやる工夫は、まだありません<small>工夫を押して「わが家でやる」を選ぶと、1年の節約の合計が出ます</small>`}</div>
+    ${G.GROUPS.map((g) => `<div class="res"><h2>${esc(g)}</h2>${T.filter((t) => t.g === g).map((t) => met.has(t.id) ? `<button data-t="${t.id}"><span>${pl.includes(t.id) ? "✓ " : ""}${esc(t.a)}<small>1年で ${yen(t.y)}${pl.includes(t.id) ? "・わが家でやる" : ""}</small></span><span aria-hidden="true">▶</span></button>` : `<div class="no"><span>？？？（まだ）</span></div>`).join("")}</div>`).join("")}
     ${footer()}`);
   $("back").onclick = home;
   document.querySelectorAll(".res button").forEach((b) => (b.onclick = () => tip(+b.dataset.t)));
@@ -655,9 +660,13 @@ function tip(id) {
   show(`<header><button class="icon" id="back" aria-label="コツ帳へ">←</button><h1>コツ帳<small>${esc(t.g)}</small></h1><span></span></header>
     <div class="detail"><p class="big" data-a11y-say>${esc(t.a)}</p><p class="yy">1年で ${yen(t.y)}</p><p class="sim">${esc(t.c)}</p><p class="note">へる量：${esc(t.e)}</p><p class="sim"><b>なぜ？</b>${esc(t.w)}</p>
     <p class="note"><a href="${esc(t.src)}" target="_blank" rel="noopener">資源エネルギー庁「${esc(t.g)}」のページ</a></p></div>
+    <button class="sub" id="plan-t" aria-pressed="false"></button>
     <button class="main alt" id="again">この工夫から練習する</button>
     ${footer()}`);
   $("back").onclick = () => dex();
+  const pb = $("plan-t"), paint = () => { const on = planIds(load()).includes(id); pb.setAttribute("aria-pressed", on ? "true" : "false"); pb.textContent = on ? "✓ わが家でやる（押すと外す）" : "＋ わが家でやる"; };
+  paint();
+  pb.onclick = () => { const on = !planIds(load()).includes(id); save((s) => { s.plan[id] = [on ? 1 : 0, Date.now()]; }); paint(); say(on ? "わが家でやる工夫に入れました" : "わが家でやる工夫から外しました"); };
   $("again").onclick = () => startRun("p", id);
 }
 function cal(ym) {
@@ -685,7 +694,7 @@ function cal(ym) {
   document.querySelectorAll(".cal button").forEach((b) => (b.onclick = () => startRun("a", b.dataset.k)));
 }
 
-window.__sk = { G, load, save, achList, nextAch, lateDays, todayKey, prevDay, shareText, streak, sumOf, cur: () => cur, pick: (j) => pick(j), hint: () => hint(), play: (k) => play(k), home: () => home(), startRun: (m, o) => startRun(m, o), answer: () => G.answerOf(cur.q) };
+window.__sk = { G, load, save, merge, clean, planIds, tip: (i) => tip(i), dex: () => dex(), achList, nextAch, lateDays, todayKey, prevDay, shareText, streak, sumOf, cur: () => cur, pick: (j) => pick(j), hint: () => hint(), play: (k) => play(k), home: () => home(), startRun: (m, o) => startRun(m, o), answer: () => G.answerOf(cur.q) };
 home();
 if ("serviceWorker" in navigator && location.protocol === "https:" && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
