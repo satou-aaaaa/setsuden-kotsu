@@ -1,0 +1,29 @@
+{
+  "name": "節電のコツ",
+  "short_name": "節電のコツ",
+  "description": "家電の使い方で1年の電気代がどれだけ変わるかを当てる1日5問のゲーム",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef3ec",
+  "theme_color": "#eef3ec",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
